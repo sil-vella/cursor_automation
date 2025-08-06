@@ -1,0 +1,9 @@
+flask==2.3.3
+requests==2.31.0
+python-dotenv==1.0.0
+python-Analyze this build error: Unit test failure in React component
+telegram-bot==20.7
+# Optional dependencies for future build system enhancements
+# subprocess.run() is built-in, no additional dependency needed
+# asyncio is built-in, no additional dependency needed
+# json, sys, time, os, argparse are all built-in 

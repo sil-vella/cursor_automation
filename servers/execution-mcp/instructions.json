@@ -1,0 +1,47 @@
+{
+  "goal": "read rule.md, build a simple HTML page, run it in Chrome, and verify with devtools-mcp",
+  "description": "Web Development Test Instructions",
+  "steps": [
+    {
+      "step": 1,
+      "description": "Read the rule.md file to understand the requirements"
+    },
+    {
+      "step": 2,
+      "description": "Build a simple HTML page based on the rules"
+    },
+    {
+      "step": 3,
+      "description": "Open the HTML page in Chrome and wait for it to load"
+    },
+    {
+      "step": 4,
+      "description": "Use devtools-mcp to check the page contents and verify it loaded correctly"
+    },
+    {
+      "step": 5,
+      "description": "If everything worked correctly, stop the execution"
+    }
+  ],
+  "metadata": {
+    "version": "1.0",
+    "type": "web_development_test",
+    "max_steps": 5,
+    "created": "2024-08-05",
+    "priority": "high",
+    "category": "web_testing"
+  },
+  "requirements": {
+    "rule_file": "rule.md",
+    "html_file": "test.html",
+    "browser": "Chrome",
+    "devtools_mcp": "enabled"
+  },
+  "success_criteria": [
+    "rule.md file is read successfully",
+    "HTML page is created and valid",
+    "Page opens in Chrome without errors",
+    "devtools-mcp can access page content",
+    "All steps complete successfully"
+  ]
+} 
