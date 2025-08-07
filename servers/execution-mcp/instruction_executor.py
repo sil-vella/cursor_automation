@@ -10,10 +10,25 @@ import time
 import os
 from pathlib import Path
 from typing import Dict, Any, Optional
+from datetime import datetime
 
 # Load environment variables
 from dotenv import load_dotenv
 load_dotenv()
+
+# Logging setup
+LOG_FILE = Path(__file__).parent / "execution.log"
+
+def log_to_file(message: str, level: str = "INFO"):
+    """Log messages to file with timestamp"""
+    timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S.%f")[:-3]
+    log_entry = f"[{timestamp}] [{level}] {message}\n"
+    
+    try:
+        with open(LOG_FILE, "a", encoding="utf-8") as f:
+            f.write(log_entry)
+    except Exception as e:
+        print(f"Failed to write to log: {e}", file=sys.stderr)
 
 def send_mcp(msg):
     """Send MCP message"""
@@ -178,6 +193,14 @@ async def mcp_server():
     print("✅ MCP server ready to receive tool calls", file=sys.stderr)
     print("💡 Available tools: run_full_execution, get_current_state, reset_execution, get_history, clear_cache", file=sys.stderr)
     
+    # Initialize logging
+    log_to_file("=" * 80, "STARTUP")
+    log_to_file("🚀 INSTRUCTION EXECUTOR MCP SERVER STARTED", "STARTUP")
+    log_to_file(f"Log file location: {LOG_FILE}", "STARTUP")
+    log_to_file("Available tools: run_full_execution, get_current_state, reset_execution, get_history, clear_cache", "STARTUP")
+    log_to_file("Enhanced message interception and user prompt detection active", "STARTUP")
+    log_to_file("=" * 80, "STARTUP")
+    
     # MCP server loop
     for line in sys.stdin:
         try:
@@ -188,6 +211,10 @@ async def mcp_server():
             method = msg.get("method", "unknown")
             msg_id = msg.get("id", "no-id")
             print(f"📨 Incoming: {method} (ID: {msg_id})", file=sys.stderr)
+            
+            # Log every message to file
+            log_to_file(f"INCOMING MESSAGE: {method} (ID: {msg_id})")
+            log_to_file(f"MESSAGE CONTENT: {json.dumps(msg, indent=2)}")
             
             # Detect potential user prompts/questions
             msg_str = json.dumps(msg).lower()
@@ -206,10 +233,19 @@ async def mcp_server():
                 "provide"
             ]
             
+            user_interaction_detected = False
+            detected_indicator = None
+            
             for indicator in user_prompt_indicators:
                 if indicator in msg_str:
+                    user_interaction_detected = True
+                    detected_indicator = indicator
                     print(f"🔍 DETECTED USER INTERACTION: '{indicator}' in message", file=sys.stderr)
                     print(f"🔍 Full message content: {json.dumps(msg, indent=2)}", file=sys.stderr)
+                    
+                    # LOG USER INTERACTION DETECTION
+                    log_to_file(f"🚨 USER INTERACTION DETECTED: '{indicator}' found in message", "ALERT")
+                    log_to_file(f"USER INTERACTION DETAILS: {json.dumps(msg, indent=2)}", "ALERT")
                     break
             
             # Detect execution status messages
@@ -217,20 +253,24 @@ async def mcp_server():
                 content = msg.get("params", {}).get("content", "")
                 if content:
                     print(f"💬 Content message: {content[:100]}...", file=sys.stderr)
+                    log_to_file(f"CONTENT MESSAGE: {content}")
                     
                     # Look for question patterns in content
                     question_patterns = ["?", "please", "enter", "input", "choose", "select"]
                     if any(pattern in content.lower() for pattern in question_patterns):
                         print(f"❓ POSSIBLE USER QUESTION DETECTED in content", file=sys.stderr)
+                        log_to_file(f"🚨 POSSIBLE USER QUESTION: {content}", "ALERT")
             
             # Track execution flow
             if method == "tools/call":
                 tool_name = msg.get("params", {}).get("name", "unknown")
                 print(f"🛠️ Tool called: {tool_name}", file=sys.stderr)
+                log_to_file(f"TOOL CALLED: {tool_name}")
                 
                 # Detect if this is during a run_full_execution
                 if tool_name == "run_full_execution":
                     print(f"🚀 FULL EXECUTION STARTED - Now monitoring for user interactions", file=sys.stderr)
+                    log_to_file("🚀 FULL EXECUTION STARTED - Enhanced monitoring active", "EXECUTION")
                     executor.add_to_history("Monitoring started", "Watching for user prompts during execution")
             
             # Enhanced user interaction detection
@@ -239,6 +279,8 @@ async def mcp_server():
             # Check for sampling requests (AI asking questions)
             if method == "sampling/createMessage":
                 print(f"🧠 AI SAMPLING REQUEST detected", file=sys.stderr)
+                log_to_file("🧠 AI SAMPLING REQUEST detected", "AI_ACTIVITY")
+                
                 messages = params.get("messages", [])
                 for message in messages:
                     content = message.get("content", {})
@@ -247,16 +289,27 @@ async def mcp_server():
                     else:
                         text = str(content)
                     
+                    log_to_file(f"AI MESSAGE CONTENT: {text}", "AI_ACTIVITY")
+                    
                     if "?" in text or any(word in text.lower() for word in ["ask", "input", "enter", "provide"]):
                         print(f"❓ AI ASKING QUESTION: {text[:200]}...", file=sys.stderr)
+                        log_to_file(f"🚨 AI ASKING QUESTION: {text}", "ALERT")
             
             # Check for user responses
             if "response" in msg_str or "answer" in msg_str:
                 print(f"💭 Possible user response detected", file=sys.stderr)
+                log_to_file("💭 Possible user response detected", "USER_ACTIVITY")
             
             # Log message size for debugging
             if len(msg_str) > 1000:
                 print(f"📏 Large message detected: {len(msg_str)} chars", file=sys.stderr)
+                log_to_file(f"📏 Large message detected: {len(msg_str)} chars", "DEBUG")
+            
+            # Log summary of detection results
+            if user_interaction_detected:
+                log_to_file(f"🚨 SUMMARY: User interaction detected via '{detected_indicator}' in {method} message", "SUMMARY")
+            else:
+                log_to_file(f"✅ SUMMARY: No user interaction detected in {method} message", "DEBUG")
             # ===== END MESSAGE INTERCEPTION =====
             
             # Handle initialization
@@ -403,6 +456,7 @@ async def mcp_server():
                     
                 elif tool_name == "run_full_execution":
                     # Reset execution and start fresh
+                    log_to_file("🚀 RUN_FULL_EXECUTION CALLED - Starting comprehensive execution", "EXECUTION")
                     executor.clear_cache()
                     
                     # Get all steps from instructions
@@ -410,6 +464,7 @@ async def mcp_server():
                     steps = instructions_data.get("steps", [])
                     
                     if not steps:
+                        log_to_file("❌ No steps found in instructions file", "ERROR")
                         send_mcp({
                             "jsonrpc": "2.0",
                             "id": msg.get("id"),
@@ -465,6 +520,10 @@ Begin execution now with Step 1."""
                         # Mark execution as started
                         executor.add_to_history("Full execution started", f"Executing {len(steps)} steps")
                         
+                        # Log the execution plan
+                        log_to_file(f"✅ EXECUTION PLAN CREATED: {len(steps)} steps for goal: {goal}", "EXECUTION")
+                        log_to_file(f"EXECUTION PLAN CONTENT:\n{execution_plan}", "EXECUTION")
+                        
                         send_mcp({
                             "jsonrpc": "2.0",
                             "id": msg.get("id"),
@@ -478,6 +537,8 @@ Begin execution now with Step 1."""
                                 "isError": False
                             }
                         })
+                        
+                        log_to_file("📤 EXECUTION PLAN SENT TO CURSOR - Now monitoring for user interactions", "EXECUTION")
                     
                 elif tool_name == "clear_cache":
                     # Clear cache and reload instructions
@@ -510,6 +571,10 @@ Begin execution now with Step 1."""
                     
         except Exception as e:
             print(f"Error processing message: {e}", file=sys.stderr)
+            log_to_file(f"❌ ERROR processing message: {str(e)}", "ERROR")
+            if "msg" in locals():
+                log_to_file(f"ERROR MESSAGE CONTENT: {json.dumps(msg, indent=2)}", "ERROR")
+            
             send_mcp({
                 "jsonrpc": "2.0",
                 "id": msg.get("id") if "msg" in locals() else None,
