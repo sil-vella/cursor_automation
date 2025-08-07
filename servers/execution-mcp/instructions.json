@@ -8,18 +8,15 @@
     },
     {
       "step": 2,
-      "description": "Build a simple HTML page based on the rules"
+      "description": "Build a simple py script that will open a chrome browser and navigate to the url https://www.google.com"
     },
+
     {
       "step": 3,
-      "description": "Open the HTML page in Chrome and wait for it to load"
-    },
-    {
-      "step": 4,
       "description": "Use devtools-mcp to check the page contents and verify it loaded correctly"
     },
     {
-      "step": 5,
+      "step": 4,
       "description": "If everything worked correctly, stop the execution"
     }
   ],
@@ -33,14 +30,16 @@
   },
   "requirements": {
     "rule_file": "rule.md",
-    "html_file": "test.html",
+    "script_file": "chrome_automation.py",
+    "target_url": "https://www.google.com",
     "browser": "Chrome",
     "devtools_mcp": "enabled"
   },
   "success_criteria": [
     "rule.md file is read successfully",
-    "HTML page is created and valid",
-    "Page opens in Chrome without errors",
+    "Python script is created successfully",
+    "Chrome browser opens without errors", 
+    "Navigation to Google.com successful",
     "devtools-mcp can access page content",
     "All steps complete successfully"
   ]
