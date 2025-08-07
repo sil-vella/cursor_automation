@@ -183,6 +183,82 @@ async def mcp_server():
         try:
             msg = json.loads(line)
             
+            # ===== MESSAGE INTERCEPTION =====
+            # Log all incoming messages for analysis
+            method = msg.get("method", "unknown")
+            msg_id = msg.get("id", "no-id")
+            print(f"📨 Incoming: {method} (ID: {msg_id})", file=sys.stderr)
+            
+            # Detect potential user prompts/questions
+            msg_str = json.dumps(msg).lower()
+            
+            # Look for user interaction patterns
+            user_prompt_indicators = [
+                "user",
+                "input", 
+                "prompt",
+                "question",
+                "ask",
+                "confirm",
+                "choose",
+                "select",
+                "enter",
+                "provide"
+            ]
+            
+            for indicator in user_prompt_indicators:
+                if indicator in msg_str:
+                    print(f"🔍 DETECTED USER INTERACTION: '{indicator}' in message", file=sys.stderr)
+                    print(f"🔍 Full message content: {json.dumps(msg, indent=2)}", file=sys.stderr)
+                    break
+            
+            # Detect execution status messages
+            if method == "notifications/message" or "content" in msg_str:
+                content = msg.get("params", {}).get("content", "")
+                if content:
+                    print(f"💬 Content message: {content[:100]}...", file=sys.stderr)
+                    
+                    # Look for question patterns in content
+                    question_patterns = ["?", "please", "enter", "input", "choose", "select"]
+                    if any(pattern in content.lower() for pattern in question_patterns):
+                        print(f"❓ POSSIBLE USER QUESTION DETECTED in content", file=sys.stderr)
+            
+            # Track execution flow
+            if method == "tools/call":
+                tool_name = msg.get("params", {}).get("name", "unknown")
+                print(f"🛠️ Tool called: {tool_name}", file=sys.stderr)
+                
+                # Detect if this is during a run_full_execution
+                if tool_name == "run_full_execution":
+                    print(f"🚀 FULL EXECUTION STARTED - Now monitoring for user interactions", file=sys.stderr)
+                    executor.add_to_history("Monitoring started", "Watching for user prompts during execution")
+            
+            # Enhanced user interaction detection
+            params = msg.get("params", {})
+            
+            # Check for sampling requests (AI asking questions)
+            if method == "sampling/createMessage":
+                print(f"🧠 AI SAMPLING REQUEST detected", file=sys.stderr)
+                messages = params.get("messages", [])
+                for message in messages:
+                    content = message.get("content", {})
+                    if isinstance(content, dict):
+                        text = content.get("text", "")
+                    else:
+                        text = str(content)
+                    
+                    if "?" in text or any(word in text.lower() for word in ["ask", "input", "enter", "provide"]):
+                        print(f"❓ AI ASKING QUESTION: {text[:200]}...", file=sys.stderr)
+            
+            # Check for user responses
+            if "response" in msg_str or "answer" in msg_str:
+                print(f"💭 Possible user response detected", file=sys.stderr)
+            
+            # Log message size for debugging
+            if len(msg_str) > 1000:
+                print(f"📏 Large message detected: {len(msg_str)} chars", file=sys.stderr)
+            # ===== END MESSAGE INTERCEPTION =====
+            
             # Handle initialization
             if msg.get("method") == "initialize":
                 send_mcp({
