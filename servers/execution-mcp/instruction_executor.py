@@ -251,7 +251,7 @@ async def mcp_server():
     
     print("🚀 Starting Instruction Executor MCP server...", file=sys.stderr)
     print("✅ MCP server ready to receive tool calls", file=sys.stderr)
-    print("💡 Available tools: start_execution, execute_next_step, get_current_state, reset_execution, get_history, run_full_execution, clear_cache", file=sys.stderr)
+    print("💡 Available tools: run_full_execution, get_current_state, reset_execution, get_history, clear_cache", file=sys.stderr)
     
     # MCP server loop
     for line in sys.stdin:
@@ -285,30 +285,6 @@ async def mcp_server():
                     "id": msg.get("id"),
                     "result": {
                         "tools": [
-                            {
-                                "name": "start_execution",
-                                "title": "Start Execution",
-                                "description": "Start the instruction execution process",
-                                "inputSchema": {
-                                    "type": "object",
-                                    "properties": {}
-                                }
-                            },
-                            {
-                                "name": "execute_next_step",
-                                "title": "Execute Next Step",
-                                "description": "Execute the next step in the instruction sequence using Cursor's LLM",
-                                "inputSchema": {
-                                    "type": "object",
-                                    "properties": {
-                                        "user_input": {
-                                            "type": "string",
-                                            "description": "User input for the next step (default: 'Next step toward achieving the final goal:')",
-                                            "default": "Next step toward achieving the final goal:"
-                                        }
-                                    }
-                                }
-                            },
                             {
                                 "name": "get_current_state",
                                 "title": "Get Current State",
@@ -364,99 +340,7 @@ async def mcp_server():
                 tool_name = msg.get("params", {}).get("name")
                 arguments = msg.get("params", {}).get("arguments", {})
                 
-                if tool_name == "start_execution":
-                    # Clear cache and start fresh
-                    executor.clear_cache()
-                    
-                    prompt = executor.construct_prompt("Start the execution")
-                    
-                    send_mcp({
-                        "jsonrpc": "2.0",
-                        "id": msg.get("id"),
-                        "result": {
-                            "content": [
-                                {
-                                    "type": "text",
-                                    "text": f"Execution started. Initial prompt:\n\n{prompt}"
-                                }
-                            ],
-                            "isError": False
-                        }
-                    })
-                    
-                elif tool_name == "execute_next_step":
-                    user_input = arguments.get("user_input", "Execute the next predefined step")
-                    
-                    if executor.goal_achieved:
-                        send_mcp({
-                            "jsonrpc": "2.0",
-                            "id": msg.get("id"),
-                            "result": {
-                                "content": [
-                                    {
-                                        "type": "text",
-                                        "text": "Goal already achieved. Use start_execution to begin a new sequence."
-                                    }
-                                ],
-                                "isError": False
-                            }
-                        })
-                    else:
-                        # Get the current step data
-                        step_data = executor.get_current_step_data()
-                        if not step_data:
-                            executor.goal_achieved = True
-                            send_mcp({
-                                "jsonrpc": "2.0",
-                                "id": msg.get("id"),
-                                "result": {
-                                    "content": [
-                                        {
-                                            "type": "text",
-                                            "text": "✅ All steps completed! Goal achieved."
-                                        }
-                                    ],
-                                    "isError": False
-                                }
-                            })
-                        else:
-                            # Get step info but don't execute yet
-                            step_number = step_data.get("step", executor.current_step + 1)
-                            description = step_data.get("description", "")
-                            
-                            # Provide the step instruction for Cursor's LLM to execute
-                            instruction_prompt = f"""**STEP {step_number} INSTRUCTION:**
-
-{description}
-
-**YOUR TASK:** Execute this step now using your available tools. Be specific and actionable in your execution.
-
-**AVAILABLE TOOLS:**
-- File operations (read_file, write, search_replace, etc.)
-- Terminal commands (run_terminal_cmd)
-- Web browser control (for opening files)
-- Any other tools you have access to
-
-**WHEN COMPLETE:** The step will be marked as completed automatically. Just execute the instruction above."""
-                            
-                            # Mark this step as in progress
-                            executor.add_to_history(f"Step {step_number}", f"In progress: {description}")
-                            
-                            send_mcp({
-                                "jsonrpc": "2.0",
-                                "id": msg.get("id"),
-                                "result": {
-                                    "content": [
-                                        {
-                                            "type": "text",
-                                            "text": instruction_prompt
-                                        }
-                                    ],
-                                    "isError": False
-                                }
-                            })
-                        
-                elif tool_name == "get_current_state":
+                if tool_name == "get_current_state":
                     state = {
                         "current_step": executor.current_step,
                         "goal_achieved": executor.goal_achieved,
@@ -517,67 +401,82 @@ async def mcp_server():
                     })
                     
                 elif tool_name == "run_full_execution":
-                    # Reset execution
-                    executor = InstructionExecutor()
-                    executor.current_step = 0
-                    executor.history = []
-                    executor.goal_achieved = False
+                    # Reset execution and start fresh
+                    executor.clear_cache()
                     
-                    steps = []
-                    max_steps = 10  # Prevent infinite loops
+                    # Get all steps from instructions
+                    instructions_data = json.loads(executor.instructions_file.read_text()) if executor.instructions_file.exists() else {}
+                    steps = instructions_data.get("steps", [])
                     
-                    while not executor.goal_achieved and executor.current_step < max_steps:
-                        # Execute next step with REAL LLM
-                        prompt = executor.construct_prompt("Next step toward achieving the final goal:")
-                        
-                        # Send REAL LLM request
-                        sampling_id = f"sampling_{int(time.time() * 1000)}"
-                        sampling_request = {
+                    if not steps:
+                        send_mcp({
                             "jsonrpc": "2.0",
-                            "id": sampling_id,
-                            "method": "sampling/createMessage",
-                            "params": {
-                                "messages": [
+                            "id": msg.get("id"),
+                            "result": {
+                                "content": [
                                     {
-                                        "role": "user",
-                                        "content": {"type": "text", "text": prompt}
+                                        "type": "text",
+                                        "text": "❌ No steps found in instructions file. Please ensure instructions.json exists with proper step definitions."
                                     }
                                 ],
-                                "maxTokens": 500,
-                                "temperature": 0.7
+                                "isError": True
                             }
-                        }
-                        
-                        print(f"🤖 Full execution - Step {executor.current_step + 1}: Sending REAL LLM request", file=sys.stderr)
-                        send_mcp(sampling_request)
-                        
-                        # For now, simulate the response but mark it as real
-                        llm_response = f"REAL LLM RESPONSE: Step {executor.current_step + 1} - {prompt[:100]}..."
-                        executor.add_to_history("Next step toward achieving the final goal:", llm_response)
-                        
-                        steps.append(f"Step {executor.current_step}: {llm_response}")
-                        
-                        # Add a small delay between steps
-                        await asyncio.sleep(0.1)
-                    
-                    if executor.goal_achieved:
-                        result_text = f"✅ Goal achieved in {executor.current_step} steps!\n\n" + "\n\n".join(steps)
+                        })
                     else:
-                        result_text = f"⚠️ Execution stopped after {max_steps} steps. Goal not yet achieved.\n\n" + "\n\n".join(steps)
-                    
-                    send_mcp({
-                        "jsonrpc": "2.0",
-                        "id": msg.get("id"),
-                        "result": {
-                            "content": [
-                                {
-                                    "type": "text",
-                                    "text": result_text
-                                }
-                            ],
-                            "isError": False
-                        }
-                    })
+                        # Provide all steps as a comprehensive execution plan
+                        goal = instructions_data.get("goal", "Complete the instructions")
+                        description = instructions_data.get("description", "Instruction Execution")
+                        
+                        execution_plan = f"""# {description}
+
+## Goal: {goal}
+
+## Full Execution Plan - Execute All Steps:
+
+"""
+                        
+                        for step in steps:
+                            step_num = step.get("step", 0)
+                            step_desc = step.get("description", "")
+                            execution_plan += f"""**STEP {step_num}:** {step_desc}
+
+"""
+                        
+                        execution_plan += f"""
+**YOUR TASK:** Execute all {len(steps)} steps above in sequence using your available tools.
+
+**AVAILABLE TOOLS:**
+- File operations (read_file, write, search_replace, etc.)
+- Terminal commands (run_terminal_cmd)
+- Web browser control (for opening files)
+- Any other tools you have access to
+
+**EXECUTION APPROACH:**
+1. Read through all steps to understand the complete workflow
+2. Execute each step in order
+3. Verify completion of each step before moving to the next
+4. Report progress as you complete each step
+
+**IMPORTANT:** Execute the actual steps using real tools - do not simulate or skip any steps.
+
+Begin execution now with Step 1."""
+
+                        # Mark execution as started
+                        executor.add_to_history("Full execution started", f"Executing {len(steps)} steps")
+                        
+                        send_mcp({
+                            "jsonrpc": "2.0",
+                            "id": msg.get("id"),
+                            "result": {
+                                "content": [
+                                    {
+                                        "type": "text",
+                                        "text": execution_plan
+                                    }
+                                ],
+                                "isError": False
+                            }
+                        })
                     
                 elif tool_name == "clear_cache":
                     # Clear cache and reload instructions
