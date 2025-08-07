@@ -122,84 +122,9 @@ class InstructionExecutor:
         description = step_data.get("description", "")
         step_number = step_data.get("step", 0)
         
-        # Construct a prompt for the AI to interpret and execute the step
-        prompt = f"""You are an AI assistant that executes development tasks step by step.
-
-CURRENT STEP: {step_number}
-INSTRUCTION: {description}
-
-AVAILABLE TOOLS:
-- File operations (read, write, create files)
-- Web browser control (open files in Chrome)
-- DevTools integration (check page content)
-- System commands (run terminal commands)
-
-TASK: Interpret the instruction above and execute it. Be specific about what you're doing.
-
-Respond with:
-1. What you're going to do
-2. The actual execution
-3. The result
-
-If you need to create files, use the file paths mentioned in the instruction.
-If you need to open files in Chrome, use the 'open' command.
-If you need to check page content, describe how you would use DevTools.
-
-Execute the step now:"""
-        
-        # For now, we'll simulate the AI response
-        # In a real implementation, this would send the prompt to Cursor's LLM
-        ai_response = f"🤖 AI interpreting step {step_number}: {description}\n\n"
-        
-        # Simulate AI execution based on the description
-        if "read" in description.lower() and "rule.md" in description.lower():
-            if Path("rule.md").exists():
-                content = Path("rule.md").read_text()
-                ai_response += f"✅ Read rule.md file\nContent preview: {content[:100]}..."
-            else:
-                ai_response += "❌ rule.md file not found"
-                
-        elif "build" in description.lower() and "html" in description.lower():
-            html_content = """<!DOCTYPE html>
-<html>
-<head>
-    <title>Test Page</title>
-</head>
-<body>
-    <h1>Hello World!</h1>
-    <p>This is a test page created by the instruction executor.</p>
-    <div id='content'>
-        <h2>Features:</h2>
-        <ul>
-            <li>Simple HTML structure</li>
-            <li>Basic styling</li>
-            <li>Ready for testing</li>
-        </ul>
-    </div>
-</body>
-</html>"""
-            with open("test.html", "w") as f:
-                f.write(html_content)
-            ai_response += "✅ Created test.html with proper HTML structure"
-            
-        elif "chrome" in description.lower() and "load" in description.lower():
-            import subprocess
-            result = subprocess.run("open test.html", shell=True, capture_output=True, text=True)
-            if result.returncode == 0:
-                ai_response += "✅ Opened test.html in Chrome browser"
-            else:
-                ai_response += f"❌ Failed to open in Chrome: {result.stderr}"
-                
-        elif "devtools" in description.lower():
-            ai_response += "✅ DevTools check: Would use Chrome DevTools Protocol to verify page content"
-            
-        elif "stop" in description.lower() or "worked" in description.lower():
-            ai_response += "✅ All steps completed successfully! Execution stopped."
-            
-        else:
-            ai_response += f"🤔 AI needs to figure out how to: {description}"
-        
-        return ai_response
+        # Return the step instruction for Cursor AI to execute
+        # The MCP framework will handle passing this to the AI
+        return f"**STEP {step_number}:** {description}\n\nPlease execute this step using your available tools."
     
     def construct_prompt(self, user_input: str = "") -> str:
         """Construct the prompt for the LLM."""
