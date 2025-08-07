@@ -233,9 +233,33 @@ async def mcp_server():
                 "provide"
             ]
             
+            # Enhanced patterns for actual user chat prompts
+            chat_prompt_patterns = [
+                "what would you like",
+                "please provide",
+                "please enter",
+                "please specify",
+                "please choose",
+                "please select",
+                "do you want",
+                "would you prefer",
+                "which option",
+                "how would you like",
+                "please confirm",
+                "please tell me",
+                "what should",
+                "please input",
+                "enter your",
+                "type your",
+                "specify the"
+            ]
+            
             user_interaction_detected = False
             detected_indicator = None
+            chat_prompt_detected = False
+            detected_chat_pattern = None
             
+            # Check for basic user interaction patterns
             for indicator in user_prompt_indicators:
                 if indicator in msg_str:
                     user_interaction_detected = True
@@ -248,7 +272,19 @@ async def mcp_server():
                     log_to_file(f"USER INTERACTION DETAILS: {json.dumps(msg, indent=2)}", "ALERT")
                     break
             
-            # Detect execution status messages
+            # Check for actual chat prompt patterns
+            for pattern in chat_prompt_patterns:
+                if pattern in msg_str:
+                    chat_prompt_detected = True
+                    detected_chat_pattern = pattern
+                    print(f"💬 DETECTED CHAT PROMPT: '{pattern}' in message", file=sys.stderr)
+                    
+                    # LOG CHAT PROMPT DETECTION
+                    log_to_file(f"🚨 CHAT PROMPT DETECTED: '{pattern}' found in message", "CHAT_PROMPT")
+                    log_to_file(f"CHAT PROMPT DETAILS: {json.dumps(msg, indent=2)}", "CHAT_PROMPT")
+                    break
+            
+            # Detect execution status messages and extract chat content
             if method == "notifications/message" or "content" in msg_str:
                 content = msg.get("params", {}).get("content", "")
                 if content:
@@ -260,6 +296,47 @@ async def mcp_server():
                     if any(pattern in content.lower() for pattern in question_patterns):
                         print(f"❓ POSSIBLE USER QUESTION DETECTED in content", file=sys.stderr)
                         log_to_file(f"🚨 POSSIBLE USER QUESTION: {content}", "ALERT")
+                        
+                        # Log the full chat message that's prompting the user
+                        log_to_file(f"🗨️ FULL CHAT PROMPT MESSAGE: {content}", "CHAT_MESSAGE")
+            
+            # Enhanced content extraction for different message types
+            params = msg.get("params", {})
+            
+            # Check for text content in various message formats
+            text_content = ""
+            if "text" in params:
+                text_content = params.get("text", "")
+            elif "messages" in params:
+                messages = params.get("messages", [])
+                for message in messages:
+                    if isinstance(message, dict):
+                        if "content" in message:
+                            content_obj = message.get("content", {})
+                            if isinstance(content_obj, dict) and "text" in content_obj:
+                                text_content += content_obj.get("text", "") + "\n"
+                            elif isinstance(content_obj, str):
+                                text_content += content_obj + "\n"
+                        elif "text" in message:
+                            text_content += message.get("text", "") + "\n"
+            
+            # If we found text content, check for chat prompts
+            if text_content:
+                text_lower = text_content.lower()
+                log_to_file(f"EXTRACTED TEXT CONTENT: {text_content[:500]}...", "TEXT_CONTENT")
+                
+                # Check for chat prompt patterns in extracted text
+                for pattern in chat_prompt_patterns:
+                    if pattern in text_lower:
+                        print(f"💬 CHAT PROMPT IN TEXT: '{pattern}' found", file=sys.stderr)
+                        log_to_file(f"🚨 CHAT PROMPT IN TEXT: '{pattern}' detected", "CHAT_PROMPT")
+                        log_to_file(f"🗨️ FULL PROMPT TEXT: {text_content}", "CHAT_MESSAGE")
+                        break
+                
+                # Check for question indicators in text
+                if "?" in text_content or any(word in text_lower for word in ["please", "enter", "input", "choose", "select", "confirm"]):
+                    log_to_file(f"🚨 QUESTION DETECTED IN TEXT CONTENT", "CHAT_PROMPT")
+                    log_to_file(f"🗨️ QUESTION TEXT: {text_content}", "CHAT_MESSAGE")
             
             # Track execution flow
             if method == "tools/call":
@@ -306,7 +383,9 @@ async def mcp_server():
                 log_to_file(f"📏 Large message detected: {len(msg_str)} chars", "DEBUG")
             
             # Log summary of detection results
-            if user_interaction_detected:
+            if chat_prompt_detected:
+                log_to_file(f"🚨 SUMMARY: CHAT PROMPT detected via '{detected_chat_pattern}' in {method} message", "SUMMARY")
+            elif user_interaction_detected:
                 log_to_file(f"🚨 SUMMARY: User interaction detected via '{detected_indicator}' in {method} message", "SUMMARY")
             else:
                 log_to_file(f"✅ SUMMARY: No user interaction detected in {method} message", "DEBUG")
