@@ -1,5 +1,5 @@
 {
-  "goal": "read rule.md, build a simple HTML page, run it in Chrome, and verify with devtools-mcp",
+  "goal": "Create a simple web page",
   "description": "Web Development Test Instructions",
   "steps": [
     {
@@ -23,14 +23,6 @@
       "description": "If everything worked correctly, stop the execution"
     }
   ],
-  "metadata": {
-    "version": "1.0",
-    "type": "web_development_test",
-    "max_steps": 5,
-    "created": "2024-08-05",
-    "priority": "high",
-    "category": "web_testing"
-  },
   "requirements": {
     "rule_file": "rule.md",
     "html_file": "test.html",
@@ -43,5 +35,11 @@
     "Page opens in Chrome without errors",
     "devtools-mcp can access page content",
     "All steps complete successfully"
-  ]
+  ],
+  "execution_config": {
+    "auto_confirm": true,
+    "timeout_seconds": 300,
+    "handle_interruptions": true,
+    "max_retries": 3
+  }
 } 

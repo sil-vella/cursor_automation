@@ -402,26 +402,9 @@ async def mcp_server():
                             }
                         })
                     else:
-                        # Execute the current predefined step
-                        step_result = executor.execute_current_step()
-                        
-                        if step_result.startswith("❌"):
-                            # Step failed
-                            send_mcp({
-                                "jsonrpc": "2.0",
-                                "id": msg.get("id"),
-                                "result": {
-                                    "content": [
-                                        {
-                                            "type": "text",
-                                            "text": f"Step {executor.current_step + 1} failed: {step_result}"
-                                        }
-                                    ],
-                                    "isError": True
-                                }
-                            })
-                        elif step_result == "No more steps to execute or step data not found.":
-                            # All steps completed
+                        # Get the current step data
+                        step_data = executor.get_current_step_data()
+                        if not step_data:
                             executor.goal_achieved = True
                             send_mcp({
                                 "jsonrpc": "2.0",
@@ -430,15 +413,34 @@ async def mcp_server():
                                     "content": [
                                         {
                                             "type": "text",
-                                            "text": f"✅ All steps completed! Goal achieved.\n\nFinal step result: {step_result}"
+                                            "text": "✅ All steps completed! Goal achieved."
                                         }
                                     ],
                                     "isError": False
                                 }
                             })
                         else:
-                            # Step succeeded
-                            executor.add_to_history(f"Execute step {executor.current_step + 1}", step_result)
+                            # Get step info but don't execute yet
+                            step_number = step_data.get("step", executor.current_step + 1)
+                            description = step_data.get("description", "")
+                            
+                            # Provide the step instruction for Cursor's LLM to execute
+                            instruction_prompt = f"""**STEP {step_number} INSTRUCTION:**
+
+{description}
+
+**YOUR TASK:** Execute this step now using your available tools. Be specific and actionable in your execution.
+
+**AVAILABLE TOOLS:**
+- File operations (read_file, write, search_replace, etc.)
+- Terminal commands (run_terminal_cmd)
+- Web browser control (for opening files)
+- Any other tools you have access to
+
+**WHEN COMPLETE:** The step will be marked as completed automatically. Just execute the instruction above."""
+                            
+                            # Mark this step as in progress
+                            executor.add_to_history(f"Step {step_number}", f"In progress: {description}")
                             
                             send_mcp({
                                 "jsonrpc": "2.0",
@@ -447,7 +449,7 @@ async def mcp_server():
                                     "content": [
                                         {
                                             "type": "text",
-                                            "text": f"✅ Step {executor.current_step} completed successfully!\n\n{step_result}\n\nReady for step {executor.current_step + 1}."
+                                            "text": instruction_prompt
                                         }
                                     ],
                                     "isError": False
