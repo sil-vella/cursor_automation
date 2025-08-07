@@ -178,6 +178,16 @@ If the goal is achieved, respond with "DONE"."""
         self.current_step = 0
         self.history = []
         self.goal_achieved = False
+        
+        # Clear the log file to start fresh
+        try:
+            with open(LOG_FILE, "w", encoding="utf-8") as f:
+                f.write("")  # Empty the log file
+            print("🗑️ Log file cleared for fresh monitoring", file=sys.stderr)
+            log_to_file("🔄 CACHE CLEARED - Log file emptied for fresh execution monitoring", "STARTUP")
+        except Exception as e:
+            print(f"Failed to clear log file: {e}", file=sys.stderr)
+            
         print("🔄 Cache cleared and instructions reloaded", file=sys.stderr)
 
 
@@ -621,6 +631,7 @@ Begin execution now with Step 1."""
                     
                 elif tool_name == "clear_cache":
                     # Clear cache and reload instructions
+                    log_to_file("🧹 CLEAR_CACHE CALLED - Preparing for fresh execution monitoring", "EXECUTION")
                     executor.clear_cache()
                     
                     send_mcp({
@@ -630,7 +641,7 @@ Begin execution now with Step 1."""
                             "content": [
                                 {
                                     "type": "text",
-                                    "text": "Cache cleared and instructions reloaded successfully."
+                                    "text": "Cache cleared, log file emptied, and instructions reloaded successfully. Ready for fresh execution monitoring."
                                 }
                             ],
                             "isError": False
